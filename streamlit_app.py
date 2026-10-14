@@ -207,7 +207,7 @@ with st.expander("How to use this app", expanded=False):
         """
         1. **Inspect the historical map.** Pan and zoom in **Map**. Click a position or use the rectangle tool to select a region. The displayed values are historical-image pixels, not latitude and longitude.
         2. **Save a pin or region.** Expand **Save pin or region**, give the selection a title and confidence level, and record why it matters.
-        3. **Work with detailed text.** Open **OCR & text**. The historical canvas uses Factum's high-resolution tiles. For OCR, upload a crop from the linked Factum viewer for the most exact source detail; **Current map rectangle** uses the lower-resolution Wikimedia fallback derivative.
+        3. **Work with detailed text.** Open **OCR & text**. For the best results, upload a high-resolution crop from the linked Factum source viewer; the research canvas uses a lower-resolution display derivative.
         4. **Keep text stages separate.** Preserve raw OCR, corrected transcription, modern-character transliteration, and English translation in their respective fields. Use `[unclear]`, `[illegible]`, and `[possible reading: ...]` where appropriate.
         5. **Review AI suggestions.** AI output is optional and remains unreviewed until you verify and edit it. The selected provider and model are saved as provenance.
         6. **Add geographic hypotheses.** In **Georeference**, associate historical pixels with modern WGS84 locations. Use at least three non-collinear, well-distributed control points and record the reasoning for each match.
@@ -234,10 +234,6 @@ with tabs[0]:
     toolbar[4].link_button("Factum source viewer", FACTUM_VIEWER_URL, use_container_width=True)
     if projection.startswith("WGS84"):
         st.caption("WGS84 geographic mode uses an un-tiled coordinate canvas because standard OSM/Carto tiles are Web Mercator.")
-    st.caption(
-        "Historical detail is streamed from Factum's eight-level tile pyramid. "
-        "The Wikimedia derivative remains underneath as a fallback if a tile cannot load."
-    )
 
     selected = selected_record(records)
     selected_id = int(selected["id"]) if selected else None
@@ -726,8 +722,7 @@ with tabs[5]:
             ("Historical image CRS", MAP_CRS),
             ("Modern control-point CRS", "WGS84 / EPSG:4326"),
             ("Included transformation", "2D affine, fitted by least squares"),
-            ("Historical canvas", "Factum eight-level tile pyramid; 512 px tiles"),
-            ("Display fallback", "3,840 px Wikimedia thumbnail"),
+            ("Display derivative", "3,840 px Wikimedia thumbnail"),
             ("Full image", "Wikimedia original, approximately 890 MB"),
             ("OCR", "Tesseract experiments; never authoritative"),
             ("Persistence", "Local SQLite plus explicit backup/restore"),
@@ -746,12 +741,11 @@ with tabs[5]:
 
         **Known limits**
 
-        - High-resolution canvas imagery is loaded from Factum's remote tile service. Its availability, access policy, and performance remain under Factum's control.
-        - **Current map rectangle** OCR crops come from the Wikimedia derivative and are an approximate convenience. Upload a crop from the Factum viewer when exact source detail matters.
+        - The research canvas uses a 3,840 px derivative. Use the linked Factum viewer for source-detail inspection and upload a crop for OCR when the derivative is insufficient.
         - The aligned browser overlay is a visual corner-envelope approximation. It is not a resampled or scientifically rectified raster.
         - Automated recognition of medieval hands and abbreviations is unreliable; human review remains essential.
         - OpenStreetMap and CartoDB availability and terms are controlled by their providers.
-        - The app requests only the individual Factum tiles needed for the visible browser viewport; it does not bulk-download or harvest the pyramid.
+        - Factum's exact tile pattern and permission for automated harvesting remain unverified, so this release does not scrape its tiles.
         """
     )
     with st.expander("AI model configuration"):
