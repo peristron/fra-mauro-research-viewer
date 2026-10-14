@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 APP_NAME = "Fra Mauro Research Viewer"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.0.0"
 
 MAP_WIDTH = 60_351
 MAP_HEIGHT = 60_351
@@ -26,23 +26,6 @@ COMMONS_PREVIEW_URL = (
 FACTUM_VIEWER_URL = (
     "https://www.highres.factum-arte.org/Fra_Mauro_Map/shared/viewer.html"
 )
-FACTUM_TILES_BASE_URL = (
-    "https://www.highres.factum-arte.org/Fra_Mauro_Map/panos/"
-    "Fra_Mauro_Map_8Bit_sRGB_770dpi_Color_FLAT_Browser.tiles"
-)
-FACTUM_TILED_WIDTH = 77_056
-FACTUM_TILED_HEIGHT = 63_684
-FACTUM_TILE_SIZE = 512
-FACTUM_TILE_LEVELS: dict[int, tuple[int, int]] = {
-    1: (640, 530),
-    2: (1_152, 952),
-    3: (2_304, 1_904),
-    4: (4_864, 4_020),
-    5: (9_728, 8_040),
-    6: (19_200, 15_868),
-    7: (38_528, 31_842),
-    8: (77_056, 63_684),
-}
 
 USER_AGENT = (
     "FraMauroResearchViewer/1.0 research application "
