@@ -57,6 +57,79 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
+st.markdown(
+    """
+    <style>
+        :root {
+            --ink: #eee9df;
+            --muted: #aeb8b1;
+            --paper: #111715;
+            --accent: #d17863;
+            --line: #34413c;
+            --water: #72a8b8;
+        }
+        .stApp {
+            background: #111715;
+            color: #eee9df;
+        }
+        [data-testid="stHeader"] {
+            background: rgba(17, 23, 21, .94);
+        }
+        [data-testid="stSidebar"] {
+            background: #171f1c;
+            border-right: 1px solid #34413c;
+        }
+        [data-testid="stSidebar"] * {
+            color: #eee9df;
+        }
+        h1, h2, h3, h4, p, label {
+            color: #eee9df;
+        }
+        .fm-kicker {
+            color: #d98a76;
+        }
+        .fm-subtle, [data-testid="stCaptionContainer"] {
+            color: #aeb8b1;
+        }
+        .fm-status {
+            color: #e6efea;
+            background: #182824;
+            border-left-color: #72a8b8;
+        }
+        .fm-warning {
+            color: #f2e5df;
+            background: #30211e;
+            border-left-color: #d17863;
+        }
+        div[data-testid="stExpander"] {
+            background: #171f1c;
+            border-color: #34413c;
+            border-radius: 4px;
+        }
+        div[data-testid="stDataFrame"] {
+            border-color: #34413c;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            border-bottom-color: #34413c;
+        }
+        .stTabs [data-baseweb="tab"] {
+            color: #bcc5bf;
+        }
+        .stTabs [aria-selected="true"] {
+            color: #f4efe5;
+        }
+        .stButton > button,
+        .stDownloadButton > button,
+        .stLinkButton > a {
+            border-color: #46564f;
+        }
+        hr {
+            border-color: #34413c;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 ensure_runtime_dirs()
 
@@ -128,6 +201,23 @@ st.caption(
     "Inspect, annotate, transcribe, translate, and approximately compare the map with modern geography. "
     "Pixel observations and geographic interpretations are stored separately."
 )
+
+with st.expander("How to use this app", expanded=False):
+    st.markdown(
+        """
+        1. **Inspect the historical map.** Pan and zoom in **Map**. Click a position or use the rectangle tool to select a region. The displayed values are historical-image pixels, not latitude and longitude.
+        2. **Save a pin or region.** Expand **Save pin or region**, give the selection a title and confidence level, and record why it matters.
+        3. **Work with detailed text.** Open **OCR & text**. For the best results, upload a high-resolution crop from the linked Factum source viewer; the research canvas uses a lower-resolution display derivative.
+        4. **Keep text stages separate.** Preserve raw OCR, corrected transcription, modern-character transliteration, and English translation in their respective fields. Use `[unclear]`, `[illegible]`, and `[possible reading: ...]` where appropriate.
+        5. **Review AI suggestions.** AI output is optional and remains unreviewed until you verify and edit it. The selected provider and model are saved as provenance.
+        6. **Add geographic hypotheses.** In **Georeference**, associate historical pixels with modern WGS84 locations. Use at least three non-collinear, well-distributed control points and record the reasoning for each match.
+        7. **Interpret alignment cautiously.** Residuals measure how the selected affine model fits the chosen points; they do not prove that an identification is historically correct.
+        8. **Find previous work.** Use **Search** to locate transcription, transliteration, translation, tags, and notes, then return to the highlighted map region.
+        9. **Back up every session.** Open **Export** and download the complete SQLite backup. Streamlit Community Cloud local storage may be replaced during a restart or redeployment.
+
+        The map is conventionally displayed south-up. Modern overlays are adjustable research comparisons, not claims of exact historical geolocation.
+        """
+    )
 
 tabs = st.tabs(["Map", "OCR & text", "Georeference", "Search", "Export", "Method & sources"])
 
