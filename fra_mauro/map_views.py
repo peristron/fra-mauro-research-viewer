@@ -42,7 +42,7 @@ def historical_map(
     fmap = folium.Map(
         location=center,
         crs="Simple",
-        zoom_start=-6,
+        zoom_start=-4,
         min_zoom=-8,
         max_zoom=2,
         tiles=None,
@@ -120,7 +120,10 @@ def historical_map(
         fmap.location = [MAP_HEIGHT - float(selected["pixel_y"]), float(selected["pixel_x"])]
         fmap.options["zoom"] = 0
     else:
-        fmap.fit_bounds([[0, 0], [MAP_HEIGHT, MAP_WIDTH]])
+        # Begin near the map's centre at roughly the native resolution of the
+        # 3,840 px display derivative. Researchers can still zoom out to -8.
+        fmap.location = center
+        fmap.options["zoom"] = -4
     return fmap
 
 
