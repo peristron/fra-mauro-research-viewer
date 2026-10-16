@@ -1,0 +1,134 @@
+name: Deploy Fra Mauro map tiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Pilot first; full downloads the original 890 MB image'
+        required: true
+        default: pilot
+        type: choice
+        options:
+          - pilot
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fra-mauro-tile-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ORIGINAL_URL: 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Fra_Mauro_Map_FactumArte.jpg'
+      MODE: ${{ inputs.mode }}
+
+    steps:
+      - name: Check required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+
+      - name: Install image tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libvips-tools python3-pil
+          vips --version
+          df -h .
+
+      - name: Prepare pilot or full source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work public
+          if [ "$MODE" = pilot ]; then
+            /usr/bin/python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          im = Image.new('RGB', (2048, 2048), '#e7dcc5')
+          d = ImageDraw.Draw(im)
+          for p in range(0, 2048, 256):
+              d.line((p, 0, p, 2047), fill='#705b48', width=4)
+              d.line((0, p, 2047, p), fill='#705b48', width=4)
+          for y in range(8):
+              for x in range(8):
+                  d.text((x*256+22, y*256+25), f'PILOT x={x} y={y}', fill='#1d2d35')
+          d.ellipse((350, 350, 1700, 1700), outline='#9d4b38', width=28)
+          im.save('work/source.jpg', quality=92)
+          PY
+          elif [ "$MODE" = full ]; then
+            curl --fail --location --retry 5 --retry-all-errors --retry-delay 15 \
+              --connect-timeout 30 --max-time 2400 \
+              --user-agent 'FraMauroResearchViewer/1.0 (personal academic map research)' \
+              "$ORIGINAL_URL" --output work/source.jpg
+            test "$(stat -c%s work/source.jpg)" -gt 500000000 || {
+              echo 'Original download is unexpectedly small'; exit 1;
+            }
+          else
+            echo "Unsupported mode: $MODE"; exit 1
+          fi
+          vipsheader -f width -f height work/source.jpg
+
+      - name: Generate Leaflet-compatible image pyramid
+        shell: bash
+        run: |
+          set -euo pipefail
+          vips dzsave work/source.jpg public/tiles \
+            --layout google --tile-size 512 --overlap 0 \
+            --suffix '.jpg[Q=82]' --depth onetile
+          /usr/bin/python3 - <<'PY'
+          import json, math, os
+          from pathlib import Path
+          from PIL import Image
+          with Image.open('work/source.jpg') as im:
+              w, h = im.size
+          tiles = list(Path('public/tiles').rglob('*.jpg'))
+          expected = sum(math.ceil(math.ceil(w / 2**i) / 512) *
+                         math.ceil(math.ceil(h / 2**i) / 512)
+                         for i in range(math.ceil(math.log2(max(w,h)/512))+1))
+          print(f'Source: {w} x {h}; tiles: {len(tiles)}; expected: {expected}')
+          if len(tiles) != expected:
+              raise SystemExit('Tile count mismatch; deployment stopped')
+          if len(tiles) + 3 > 20000:
+              raise SystemExit('Exceeds Cloudflare Workers Free 20,000-file limit')
+          max_zoom = math.ceil(math.log2(max(w,h)/512))
+          manifest = dict(mode=os.environ['MODE'], width=w, height=h,
+                          tileSize=512, minZoom=0, maxZoom=max_zoom,
+                          urlTemplate='/tiles/{z}/{y}/{x}.jpg', tileCount=len(tiles),
+                          source='Wikimedia Commons: Fra Mauro Map FactumArte.jpg' if os.environ['MODE']=='full' else 'Synthetic test image')
+          Path('public/manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+          Path('public/index.html').write_text('<!doctype html><meta charset="utf-8"><title>Fra Mauro tiles</title><h1>Fra Mauro tile host</h1><p>Mode: '+os.environ['MODE']+'</p><a href="/manifest.json">Tile manifest</a>')
+          Path('public/_headers').write_text('/tiles/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=86400\n/manifest.json\n  Access-Control-Allow-Origin: *\n')
+          print('Manifest:', manifest)
+          PY
+          du -sh public
+
+      - name: Deploy to existing Cloudflare Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.jsonc <<'JSON'
+          {
+            "name": "fra-mauro-map-tiles",
+            "compatibility_date": "2026-10-16",
+            "assets": {
+              "directory": "./public",
+              "not_found_handling": "none"
+            }
+          }
+          JSON
+          npx --yes wrangler@4 deploy --config wrangler.jsonc
+
+      - name: Verify public tile manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 6 --retry-delay 5 \
+            'https://fra-mauro-map-tiles.omarakhtar01.workers.dev/manifest.json'
