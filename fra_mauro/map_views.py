@@ -45,6 +45,8 @@ class HistoricalTileLayer(MacroElement):
     The Wikimedia-derived pyramid uses 512 px tiles, z=0..7. At CRS.Simple
     map zoom 0 the image is 60,351 px wide, corresponding to pyramid z=7.
     Leaflet handles tile x/y natively; the offset changes only the URL zoom.
+    Historical Leaflet latitude is NEGATIVE pixel_y, placing the tile
+    pyramid origin at the upper-left and keeping all tile indices positive.
     """
 
     _template = Template(
@@ -60,7 +62,7 @@ class HistoricalTileLayer(MacroElement):
                 minNativeZoom: {{ this.min_zoom }},
                 maxNativeZoom: {{ this.max_zoom }},
                 noWrap: true,
-                bounds: [[0, 0], [{{ this.height }}, {{ this.width }}]],
+                bounds: [[-{{ this.height }}, 0], [0, {{ this.width }}]],
                 opacity: {{ this.opacity }},
                 attribution: 'Map source: Wikimedia Commons',
                 errorTileUrl: ''
@@ -89,7 +91,7 @@ def historical_map(
     opacity: float = 1.0,
     selected_record_id: int | None = None,
 ) -> folium.Map:
-    center = [MAP_HEIGHT / 2, MAP_WIDTH / 2]
+    center = [-MAP_HEIGHT / 2, MAP_WIDTH / 2]
     fmap = folium.Map(
         location=center,
         crs="Simple",
@@ -100,11 +102,13 @@ def historical_map(
         control_scale=False,
         prefer_canvas=True,
     )
+    # CRS.Simple projects y = -latitude. Negative latitude therefore makes
+    # historical pixel_y increase downwards from the upper-left (0, 0).
     # Keep the preview underneath for a useful fallback while tiles load.
     # The overlay can be disabled from Leaflet's layer menu if necessary.
     preview = folium.raster_layers.ImageOverlay(
         image=COMMONS_PREVIEW_URL,
-        bounds=[[0, 0], [MAP_HEIGHT, MAP_WIDTH]],
+        bounds=[[-MAP_HEIGHT, 0], [0, MAP_WIDTH]],
         opacity=opacity,
         interactive=True,
         cross_origin=False,
@@ -118,7 +122,7 @@ def historical_map(
     for record in records:
         selected = record["id"] == selected_record_id
         color = "#d1493f" if selected else "#2f718a"
-        lat = MAP_HEIGHT - float(record["pixel_y"])
+        lat = -float(record["pixel_y"])
         lon = float(record["pixel_x"])
         folium.CircleMarker(
             [lat, lon],
@@ -131,8 +135,8 @@ def historical_map(
         if all(record.get(key) is not None for key in ("x1", "y1", "x2", "y2")):
             folium.Rectangle(
                 bounds=[
-                    [MAP_HEIGHT - float(record["y2"]), float(record["x1"])],
-                    [MAP_HEIGHT - float(record["y1"]), float(record["x2"])],
+                    [-float(record["y2"]), float(record["x1"])],
+                    [-float(record["y1"]), float(record["x2"])],
                 ],
                 color=color,
                 weight=2,
@@ -143,7 +147,7 @@ def historical_map(
         if not point["enabled"]:
             continue
         folium.Marker(
-            [MAP_HEIGHT - float(point["pixel_y"]), float(point["pixel_x"])],
+            [-float(point["pixel_y"]), float(point["pixel_x"])],
             tooltip=f"Control point: {point['name']}",
             icon=folium.Icon(color="darkred", icon="crosshairs", prefix="fa"),
         ).add_to(fmap)
@@ -165,13 +169,13 @@ def historical_map(
     if selected and all(selected.get(key) is not None for key in ("x1", "y1", "x2", "y2")):
         fmap.fit_bounds(
             [
-                [MAP_HEIGHT - float(selected["y2"]), float(selected["x1"])],
-                [MAP_HEIGHT - float(selected["y1"]), float(selected["x2"])],
+                [-float(selected["y2"]), float(selected["x1"])],
+                [-float(selected["y1"]), float(selected["x2"])],
             ],
             padding=(80, 80),
         )
     elif selected:
-        fmap.location = [MAP_HEIGHT - float(selected["pixel_y"]), float(selected["pixel_x"])]
+        fmap.location = [-float(selected["pixel_y"]), float(selected["pixel_x"])]
         fmap.options["zoom"] = 0
     else:
         fmap.location = center
@@ -186,7 +190,7 @@ def extract_historical_selection(map_state: dict[str, Any] | None) -> dict[str, 
     if drawing and drawing.get("geometry", {}).get("type") == "Polygon":
         coordinates = drawing["geometry"]["coordinates"][0]
         xs = [float(item[0]) for item in coordinates]
-        ys = [MAP_HEIGHT - float(item[1]) for item in coordinates]
+        ys = [-float(item[1]) for item in coordinates]
         return {
             "x1": max(0.0, min(xs)),
             "y1": max(0.0, min(ys)),
@@ -199,7 +203,7 @@ def extract_historical_selection(map_state: dict[str, Any] | None) -> dict[str, 
     if clicked:
         return {
             "pixel_x": min(float(MAP_WIDTH), max(0.0, float(clicked["lng"]))),
-            "pixel_y": min(float(MAP_HEIGHT), max(0.0, MAP_HEIGHT - float(clicked["lat"]))),
+            "pixel_y": min(float(MAP_HEIGHT), max(0.0, -float(clicked["lat"]))),
         }
     return None
 
