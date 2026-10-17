@@ -3,15 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-
 APP_NAME = "Fra Mauro Research Viewer"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 MAP_WIDTH = 60_351
 MAP_HEIGHT = 60_351
 MAP_ORIENTATION = "South-up"
 MAP_CRS = "None (historical image pixel space)"
-
 COMMONS_FILE_PAGE = (
     "https://commons.wikimedia.org/wiki/File:Fra_Mauro_Map_FactumArte.jpg"
 )
@@ -26,7 +24,15 @@ COMMONS_PREVIEW_URL = (
 FACTUM_VIEWER_URL = (
     "https://www.highres.factum-arte.org/Fra_Mauro_Map/shared/viewer.html"
 )
-
+# Independently hosted Wikimedia-derived tiles, not Factum's blocked tile server.
+CLOUDFLARE_TILE_BASE_URL = "https://fra-mauro-map-tiles.omarakhtar01.workers.dev"
+CLOUDFLARE_TILE_URL = CLOUDFLARE_TILE_BASE_URL + "/tiles/{z}/{y}/{x}.jpg"
+CLOUDFLARE_TILE_SIZE = 512
+CLOUDFLARE_MIN_ZOOM = 0
+CLOUDFLARE_MAX_ZOOM = 7
+# At Leaflet CRS.Simple zoom 0, one map pixel equals one image pixel.
+# The image pyramid's highest level is z=7, so tile z = map zoom + 7.
+CLOUDFLARE_ZOOM_OFFSET = 7
 USER_AGENT = (
     "FraMauroResearchViewer/1.0 research application "
     "(set contact in .streamlit/secrets.toml)"
@@ -38,7 +44,6 @@ DEFAULT_DB_PATH = RUNTIME_DIR / "fra_mauro.sqlite3"
 PREVIEW_CACHE_PATH = RUNTIME_DIR / "fra_mauro_3840.jpg"
 CROP_DIR = RUNTIME_DIR / "crops"
 
-
 @dataclass(frozen=True)
 class ModelPreset:
     label: str
@@ -47,7 +52,6 @@ class ModelPreset:
     secret_name: str
     supports_images: bool
     status: str = "Available when enabled for your provider account"
-
 
 MODEL_PRESETS: tuple[ModelPreset, ...] = (
     ModelPreset(
@@ -120,7 +124,6 @@ MODEL_PRESETS: tuple[ModelPreset, ...] = (
         "Text translation enabled; use a Qwen VL model for image reading",
     ),
 )
-
 PROVIDER_BASE_URLS = {
     "openai": "https://api.openai.com/v1",
     "xai": "https://api.x.ai/v1",
