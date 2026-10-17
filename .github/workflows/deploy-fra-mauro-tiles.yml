@@ -86,9 +86,13 @@ jobs:
           /usr/bin/python3 - <<'PY'
           import json, math, os
           from pathlib import Path
-          from PIL import Image
-          with Image.open('work/source.jpg') as im:
-              w, h = im.size
+          import subprocess
+          def dimension(field):
+              result = subprocess.check_output(
+                  ['vipsheader', '-f', field, 'work/source.jpg'], text=True
+              ).strip()
+              return int(result)
+          w, h = dimension('width'), dimension('height')
           tiles = list(Path('public/tiles').rglob('*.jpg'))
           expected = sum(math.ceil(math.ceil(w / 2**i) / 512) *
                          math.ceil(math.ceil(h / 2**i) / 512)
@@ -130,5 +134,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 6 --retry-delay 5 \
-            'https://fra-mauro-map-tiles.omarakhtar01.workers.dev/manifest.json'
+          /usr/bin/python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          base = 'https://fra-mauro-map-tiles.omarakhtar01.workers.dev'
+          expected_mode = os.environ['MODE']
+          for attempt in range(1, 13):
+              try:
+                  req = urllib.request.Request(
+                      f'{base}/manifest.json?verification={int(time.time())}',
+                      headers={'Cache-Control': 'no-cache', 'User-Agent': 'FraMauroTileVerifier/1.1'}
+                  )
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      manifest = json.load(response)
+                  if manifest.get('mode') != expected_mode:
+                      raise ValueError(f"Published mode {manifest.get('mode')!r}, expected {expected_mode!r}")
+                  if not manifest.get('tileCount', 0):
+                      raise ValueError('Published manifest has no tiles')
+                  print('Verified published manifest:', manifest)
+                  break
+              except (urllib.error.URLError, ValueError, json.JSONDecodeError) as exc:
+                  print(f'Attempt {attempt}/12: {exc}', flush=True)
+                  if attempt == 12:
+                      raise
+                  time.sleep(10)
+          PY
