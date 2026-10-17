@@ -7,7 +7,14 @@ from branca.element import MacroElement
 from folium import plugins
 from jinja2 import Template
 
-from .config import COMMONS_PREVIEW_URL, MAP_HEIGHT, MAP_WIDTH
+from .config import (
+    CLOUDFLARE_TILE_URL,
+    CLOUDFLARE_TILE_SIZE,
+    CLOUDFLARE_ZOOM_OFFSET,
+    COMMONS_PREVIEW_URL,
+    MAP_HEIGHT,
+    MAP_WIDTH,
+)
 from .georef import AffineResult
 
 
@@ -32,6 +39,50 @@ class FlickerOverlay(MacroElement):
         self.interval = interval
 
 
+class HistoricalTileLayer(MacroElement):
+    """Native CRS.Simple Leaflet tiles with a seven-level URL zoom offset.
+
+    The Wikimedia-derived pyramid uses 512 px tiles, z=0..7. At CRS.Simple
+    map zoom 0 the image is 60,351 px wide, corresponding to pyramid z=7.
+    Leaflet handles tile x/y natively; the offset changes only the URL zoom.
+    """
+
+    _template = Template(
+        """
+        {% macro script(this, kwargs) %}
+        var {{ this.get_name() }} = L.tileLayer(
+            {{ this.url | tojson }},
+            {
+                tileSize: {{ this.tile_size }},
+                zoomOffset: {{ this.zoom_offset }},
+                minZoom: {{ this.min_zoom }},
+                maxZoom: {{ this.max_zoom }},
+                minNativeZoom: {{ this.min_zoom }},
+                maxNativeZoom: {{ this.max_zoom }},
+                noWrap: true,
+                bounds: [[0, 0], [{{ this.height }}, {{ this.width }}]],
+                opacity: {{ this.opacity }},
+                attribution: 'Map source: Wikimedia Commons',
+                errorTileUrl: ''
+            }
+        ).addTo({{ this._parent.get_name() }});
+        {% endmacro %}
+        """
+    )
+
+    def __init__(self, opacity: float = 1.0):
+        super().__init__()
+        self._name = "HistoricalTileLayer"
+        self.url = CLOUDFLARE_TILE_URL
+        self.tile_size = CLOUDFLARE_TILE_SIZE
+        self.zoom_offset = CLOUDFLARE_ZOOM_OFFSET
+        self.min_zoom = -CLOUDFLARE_ZOOM_OFFSET
+        self.max_zoom = 0
+        self.width = MAP_WIDTH
+        self.height = MAP_HEIGHT
+        self.opacity = max(0.0, min(1.0, float(opacity)))
+
+
 def historical_map(
     records: list[dict[str, Any]],
     control_points: list[dict[str, Any]],
@@ -44,20 +95,25 @@ def historical_map(
         crs="Simple",
         zoom_start=-4,
         min_zoom=-8,
-        max_zoom=2,
+        max_zoom=0,
         tiles=None,
         control_scale=False,
         prefer_canvas=True,
     )
-    folium.raster_layers.ImageOverlay(
+    # Keep the preview underneath for a useful fallback while tiles load.
+    # The overlay can be disabled from Leaflet's layer menu if necessary.
+    preview = folium.raster_layers.ImageOverlay(
         image=COMMONS_PREVIEW_URL,
         bounds=[[0, 0], [MAP_HEIGHT, MAP_WIDTH]],
         opacity=opacity,
         interactive=True,
         cross_origin=False,
         zindex=1,
-        name="Fra Mauro map (Wikimedia preview)",
-    ).add_to(fmap)
+        name="Wikimedia preview fallback",
+        show=True,
+    )
+    preview.add_to(fmap)
+    HistoricalTileLayer(opacity=opacity).add_to(fmap)
 
     for record in records:
         selected = record["id"] == selected_record_id
@@ -83,7 +139,6 @@ def historical_map(
                 fill=selected,
                 fill_opacity=0.12,
             ).add_to(fmap)
-
     for point in control_points:
         if not point["enabled"]:
             continue
@@ -92,7 +147,6 @@ def historical_map(
             tooltip=f"Control point: {point['name']}",
             icon=folium.Icon(color="darkred", icon="crosshairs", prefix="fa"),
         ).add_to(fmap)
-
     plugins.Draw(
         export=False,
         draw_options={
@@ -120,8 +174,6 @@ def historical_map(
         fmap.location = [MAP_HEIGHT - float(selected["pixel_y"]), float(selected["pixel_x"])]
         fmap.options["zoom"] = 0
     else:
-        # Begin near the map's centre at roughly the native resolution of the
-        # 3,840 px display derivative. Researchers can still zoom out to -8.
         fmap.location = center
         fmap.options["zoom"] = -4
     return fmap
